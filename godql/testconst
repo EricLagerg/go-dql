@@ -1,0 +1,14 @@
+/*const (
+	Noop = iota
+	Equal
+	NotEqual
+	GreaterThan
+	Greater = GreaterThan
+	GreaterOrEqual
+	LessThan
+	Less = LessThan
+	LessOrEqual
+	Like
+	NotLike
+	Unlike = NotLike
+)*/
