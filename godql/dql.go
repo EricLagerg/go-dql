@@ -6,63 +6,63 @@ import (
 	"strings"
 )
 
-const strOr = "OR"
+const strOr = "or"
 
 var (
-	selec         = []byte("SELECT ")
-	selecDistinct = []byte("SELECT DISTINCT ")
-	and           = []byte(" AND ")
-	or            = []byte(" OR ")
-	wh            = []byte(" WHERE ")
-	limit         = []byte(" LIMIT ")
-	groupBy       = []byte(" GROUP BY ")
+	selectSimple   = []byte("SELECT ")
+	selectDistinct = []byte("SELECT DISTINCT ")
+	andStmnt       = []byte(" andStmnt ")
+	orStmnt        = []byte(" orStmnt ")
+	whereStmnt     = []byte(" WHERE ")
+	limitStmnt     = []byte(" limitStmnt ")
+	groupByStmnt   = []byte(" GROUP BY ")
 )
 
-func (q *Query) toDql() string {
+func (e *Expr) toDql() string {
 	var buf bytes.Buffer
 
 	// SELECT
-	if q.sd != "" {
-		buf.Write(selecDistinct)
-		buf.WriteString(q.sd)
-	} else if q.s != nil {
-		buf.Write(selec)
-		buf.WriteString(strings.Join(q.s, ","))
-	} else if q.sc != "" {
-		buf.WriteString(q.sc)
+	if e.SD != "" {
+		buf.Write(selectDistinct)
+		buf.WriteString(e.SD)
+	} else if e.S != nil {
+		buf.Write(selectSimple)
+		buf.WriteString(strings.Join(e.S, ","))
+	} else if e.SC != "" {
+		buf.WriteString(e.SC)
 	} else {
 		panic("No select statement")
 	}
 
 	// WHERE
-	if q.w != nil {
-		buf.Write(wh)
+	if e.W != nil {
+		buf.Write(whereStmnt)
 
-		l := len(q.w)
+		l := len(e.W)
 		for i := 0; i < l; i++ {
-			if q.w[i] != strOr {
-				buf.WriteString(q.w[i])
+			if e.W[i] != strOr {
+				buf.WriteString(e.W[i])
 
 				if (i%2 == 0 || i == 1) &&
-					(i < l-1 && q.w[i+1] != strOr) {
-					buf.Write(and)
+					(i < l-1 && e.W[i+1] != strOr) {
+					buf.Write(andStmnt)
 				}
 			} else {
-				buf.Write(or)
+				buf.Write(orStmnt)
 			}
 		}
 	}
 
 	// GROUP BY
-	if q.g != "" {
-		buf.Write(groupBy)
-		buf.WriteString(q.g)
+	if e.G != "" {
+		buf.Write(groupByStmnt)
+		buf.WriteString(e.G)
 	}
 
-	// LIMIT
-	if q.l > 0 {
-		buf.Write(limit)
-		buf.Write([]byte(strconv.Itoa(q.l)))
+	// limitStmnt
+	if e.L > 0 {
+		buf.Write(limitStmnt)
+		buf.Write([]byte(strconv.Itoa(e.L)))
 	}
 
 	return buf.String()

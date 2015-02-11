@@ -1,0 +1,1 @@
+### documentation: https://godoc.org/github.com/EricLagerg/go-dql/godql

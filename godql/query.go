@@ -4,9 +4,8 @@ import (
 	"fmt"
 )
 
-// Operators and aliases
+// Comparison operators and aliases for both versions of the Where() functions.
 const (
-	// Comparison operators
 	_              = ""
 	Equals         = "="
 	NotEqual       = "!="
@@ -22,6 +21,65 @@ const (
 	Unlike         = NotLike
 )
 
+// Formatting strings
+const (
+	intFormat  = "%s%s%d"
+	strFormat  = "%s%s'%s'"
+	boolFormat = "%s%s%b"
+)
+
+// Generic structure of a Query's parts
+type Expr struct {
+	S  []string // SELECT
+	SD string   // SELECT DISTINCT
+	SC string   // SELECT COUNT
+	W  []string // WHERE
+	G  string   // GROUP BY
+	L  int      // LIMIT
+}
+
+// Initialize new query. Calls NewQuery under the covers, but looks
+// prettier...
+func Query() *Expr {
+	return NewQuery()
+}
+
+// Proper Go form for initializing a new query
+func NewQuery() *Expr {
+	return new(Expr)
+}
+
+// Generic SELECT statement
+//
+// Select([]string{"firstname", "lastname", "dateofbirth"}) is
+// equivalent to: SELECT firstname,lastname,dateofbirth
+func (e *Expr) Select(fields []string) *Expr {
+	e.S = fields
+	return e
+}
+
+// SELECT DISTINCT
+//
+// SelectDistinct("firstname") is equivalent to:
+// SELECT DISTINCT firstname
+func (e *Expr) SelectDistinct(field string) *Expr {
+	e.SD = field
+	return e
+}
+
+// SelectCount("firstname") is equivalent to:
+// SELECT COUNT(firstname)
+func (e *Expr) SelectCount(field string) *Expr {
+	e.SC = fmt.Sprintf("SELECT COUNT(%s)", field)
+	return e
+}
+
+// CountDistinct("firstname") is equivalent to:
+func (e *Expr) CountDistinct(field string) *Expr {
+	e.SC = fmt.Sprintf("SELECT COUNT(DISTINCT %s)", field)
+	return e
+}
+
 // enum for position of Where() inside of Group()
 const (
 	beg = iota
@@ -29,51 +87,6 @@ const (
 	end
 	two
 )
-
-// Formatting
-const (
-	intFormat  = "%s%s%d"
-	strFormat  = "%s%s'%s'"
-	boolFormat = "%s%s%b"
-)
-
-// S: Select, SD: SelectDistinct, SC: SelectCount, W: Where,
-// G: GroupBy, L: Limit
-type Query struct {
-	s  []string
-	sd string
-	sc string
-	w  []string
-	g  string
-	l  int
-}
-
-// Select([]string{"firstname", "lastname", "dateofbirth"})
-// SELECT firstname,lastname,dateofbirth
-func (q *Query) Select(fields []string) *Query {
-	q.s = fields
-	return q
-}
-
-// SelectDistinct("firstname")
-// SELECT DISTINCT firstname
-func (q *Query) SelectDistinct(field string) *Query {
-	q.sd = field
-	return q
-}
-
-// SelectCount("firstname")
-// SELECT COUNT(firstname)
-func (q *Query) SelectCount(field string) *Query {
-	q.sc = fmt.Sprintf("SELECT COUNT(%s)", field)
-	return q
-}
-
-// CountDistinct("firstname")
-func (q *Query) CountDistinct(field string) *Query {
-	q.sc = fmt.Sprintf("SELECT COUNT(DISTINCT %s)", field)
-	return q
-}
 
 // unexported struct used to package Where()
 type where struct {
@@ -115,9 +128,10 @@ func (w *where) whereFormat(pos int) string {
 }
 
 // Group(Where("firstname", Equals, "Eric"), Where("lastname", Equals, "lagergren"))
+//
 // Used to group two WHERE expressions together, e.g.:
 // ... WHERE (firstname='eric' AND lastname='lagergren') OR ...
-func (q *Query) Group(exprs ...*where) *Query {
+func (e *Expr) Group(exprs ...*where) *Expr {
 	l := len(exprs)
 	if l == 0 {
 		panic("cannot Group() without Where()!")
@@ -125,69 +139,81 @@ func (q *Query) Group(exprs ...*where) *Query {
 
 	// append first element regardless
 	if l > 2 {
-		q.w = append(q.w, exprs[0].whereFormat(beg))
+		e.W = append(e.W, exprs[0].whereFormat(beg))
 	} else {
-		q.w = append(q.w, exprs[0].whereFormat(two))
-		return q // notice hidden return if l == 1
+		e.W = append(e.W, exprs[0].whereFormat(two))
+		return e // notice hidden return if l == 1
 	}
 
 	// loop over middle elements
 	for i := 1; i < l-1; i++ {
 		if exprs[i].std {
-			q.w = append(q.w, exprs[i].whereFormat(mid))
+			e.W = append(e.W, exprs[i].whereFormat(mid))
 		} else {
 			// "OR"
-			q.w = append(q.w, strOr)
+			e.W = append(e.W, strOr)
 		}
 	}
 
 	// append last regardless
-	q.w = append(q.w, exprs[l-1].whereFormat(end))
-	return q
+	e.W = append(e.W, exprs[l-1].whereFormat(end))
+	return e
 }
 
 // Where("firstname", Equals, "Eric")
-// Used inside a Group() since it's not a method of the Query struct
+//
+// Used inside a Group() since it's not a method of the Expr struct
 // Returns the values in a struct which is passed to whereFormat()
 // which formats
 func Where(field string, op string, value interface{}) *where {
 	return &where{field, op, value, true}
 }
 
-// Where("firstname", Equals, "Eric")
-// Where("age", Greater, 20)
-// Where("active", NotEqual, true)
+// Where("firstname", Equals, "Eric") ...
+// Where("age", Greater, 20) ...
+// Where("active", NotEqual, true) ...
+//
 // Between each Where() statement an "AND" will be inserted unless
-// an ungroup-ed OR is used --
-func (q *Query) Where(field string, op string, value interface{}) *Query {
-	q.w = append(q.w, typeFormat(field, op, value))
-	return q
+// an Or() is used.
+func (e *Expr) Where(field string, op string, value interface{}) *Expr {
+	e.W = append(e.W, typeFormat(field, op, value))
+	return e
 }
 
-// Where("firstname" Equals, "Eric").Or().Where("lastname", Equals, "lagergren")
-func (q *Query) Or() *Query {
-	q.w = append(q.w, strOr)
-	return q
+// Used outside of a Group() to denote an OR statement between two
+// WHERE statements
+//
+// e.g. ... Where("firstname" Equals, "Eric").Or().Where("lastname", Equals, "lagergren") ...
+func (e *Expr) Or() *Expr {
+	e.W = append(e.W, strOr)
+	return e
 }
 
-// Bastardized Or() for use on Group(Where(), Or(), Where())
+// Used inside a Group() to denote an OR statement between two
+// WHERE statements
+//
+// e.g. Group(Where(), Or(), Where())
 func Or() *where {
 	return &where{"", "", nil, false}
 }
 
-// GroupBy("party")
-func (q *Query) GroupBy(field string) *Query {
-	q.g = field
-	return q
+// GROUP BY statement
+//
+// GroupBy("party") is equivalent to: GROUP BY party
+func (e *Expr) GroupBy(field string) *Expr {
+	e.G = field
+	return e
 }
 
-// Limit(200)
-func (q *Query) Limit(num int) *Query {
-	q.l = num
-	return q
+// LIMIT statement
+//
+// Limit(200) is equivalent to: LIMIT 200
+func (e *Expr) Limit(num int) *Expr {
+	e.L = num
+	return e
 }
 
 // Generates all DQL parameter functions and returns formatted DQL string
-func (q *Query) String() string {
-	return q.toDql()
+func (e *Expr) String() string {
+	return e.toDql()
 }
