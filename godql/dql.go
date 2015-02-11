@@ -6,23 +6,14 @@ import (
 	"strings"
 )
 
-// Same as []byte(" ")
-const (
-	strOR      = "OR"
-	space      = 32 // " "
-	leftParen  = 40 // (
-	rightParen = 41 // )
-)
+const strOr = "OR"
 
 var (
-	groupAnd = "+"
-	groupOr  = "|"
-
 	selec         = []byte("SELECT ")
 	selecDistinct = []byte("SELECT DISTINCT ")
 	and           = []byte(" AND ")
 	or            = []byte(" OR ")
-	where         = []byte(" WHERE ")
+	wh            = []byte(" WHERE ")
 	limit         = []byte(" LIMIT ")
 	groupBy       = []byte(" GROUP BY ")
 )
@@ -45,31 +36,19 @@ func (q *Query) toDql() string {
 
 	// WHERE
 	if q.w != nil {
-		buf.Write(where)
+		buf.Write(wh)
 
-		var tb bytes.Buffer
-		var pc, wc int
 		l := len(q.w)
 		for i := 0; i < l; i++ {
-			if q.w[i] == groupAnd || q.w[i] == groupOr {
-				buf.WriteByte(leftParen)
-				pc++
-			} else {
-				tb.WriteString(q.w[i])
-				if q.w[i] == strOR {
-					tb.Write(or)
-				} else if i != l-1 {
-					tb.Write(and)
-				}
-			}
+			if q.w[i] != strOr {
+				buf.WriteString(q.w[i])
 
-			if pc == wc {
-				buf.Write(tb.Bytes())
-				for i := 0; i < pc; i++ {
-					buf.WriteByte(rightParen)
+				if (i%2 == 0 || i == 1) &&
+					(i < l-1 && q.w[i+1] != strOr) {
+					buf.Write(and)
 				}
-				pc = 0
-				wc = 0
+			} else {
+				buf.Write(or)
 			}
 		}
 	}
